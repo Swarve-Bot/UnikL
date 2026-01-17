@@ -1,6 +1,8 @@
 package unikl
 
 import (
+	"context"
+
 	"github.com/chenmingyong0423/go-mongox/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/wagslane/go-rabbitmq"
@@ -30,14 +32,36 @@ func NewUnikl(config *Config) (*Unikl, error) {
 	store := redis_store.NewRedis(redisConn)
 	cache := cache.New[string](store)
 
-	mongo := mongox.NewClient(config.MongoConn, &mongox.Config{})
+	mongoConn, err := mongo.Connect(config.MongoConn)
+	if err != nil {
+		return nil, err
+	}
+
+	mongo := mongox.NewClient(mongoConn, &mongox.Config{})
 
 	return &Unikl{
 		RedisConn: redisConn,
-		MongoConn: config.MongoConn,
+		MongoConn: mongoConn,
 
 		RabbitMQ: rbmq,
 		MongoX:   mongo,
 		Cache:    cache,
 	}, nil
+}
+
+func (u *Unikl) Close() error {
+	if err := u.RedisConn.Close(); err != nil {
+		return err
+	}
+	if err := u.MongoX.Disconnect(context.Background()); err != nil {
+		return err
+	}
+	if err := u.MongoConn.Disconnect(context.Background()); err != nil {
+		return err
+	}
+	if err := u.RabbitMQ.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }
