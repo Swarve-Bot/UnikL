@@ -6,7 +6,7 @@ import (
 )
 
 type Config struct {
-	RabbitMQURL string
+	NatsURL     string
 	RedisConfig *redis.Options
 	MongoConn   *options.ClientOptions
 }
