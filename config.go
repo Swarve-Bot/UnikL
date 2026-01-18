@@ -6,7 +6,12 @@ import (
 )
 
 type Config struct {
-	NatsURL     string
+	NatsURL string
+
+	UseRedis bool
+	UseMongo bool
+	UseNats  bool
+
 	RedisConfig *redis.Options
 	MongoConn   *options.ClientOptions
 }

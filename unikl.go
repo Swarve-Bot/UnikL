@@ -19,25 +19,36 @@ type Unikl struct {
 }
 
 func NewUnikl(config *Config) (*Unikl, error) {
+	var mongoConn *mongo.Client
+	var mongoX *mongox.Client
+	var redisConn *redis.Client
+	var nc *nats.Conn
+	var js nats.JetStreamContext
+	var err error
 
-	nc, err := nats.Connect(config.NatsURL)
-	if err != nil {
-		return nil, err
+	if config.UseNats {
+		nc, err := nats.Connect(config.NatsURL)
+		if err != nil {
+			return nil, err
+		}
+
+		js, err = nc.JetStream()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	js, err := nc.JetStream()
-	if err != nil {
-		return nil, err
+	if config.UseRedis {
+		redisConn = redis.NewClient(config.RedisConfig)
 	}
 
-	redisConn := redis.NewClient(config.RedisConfig)
-
-	mongoConn, err := mongo.Connect(config.MongoConn)
-	if err != nil {
-		return nil, err
+	if config.UseMongo {
+		mongoConn, err = mongo.Connect(config.MongoConn)
+		if err != nil {
+			return nil, err
+		}
+		mongoX = mongox.NewClient(mongoConn, &mongox.Config{})
 	}
-
-	mongo := mongox.NewClient(mongoConn, &mongox.Config{})
 
 	return &Unikl{
 		Redis:     redisConn,
@@ -45,21 +56,32 @@ func NewUnikl(config *Config) (*Unikl, error) {
 
 		Nats:      nc,
 		Jetstream: js,
-		MongoX:    mongo,
+		MongoX:    mongoX,
 	}, nil
 }
 
 func (u *Unikl) Close() error {
-	if err := u.Redis.Close(); err != nil {
-		return err
+	if u.Nats != nil {
+		u.Nats.Close()
 	}
-	if err := u.MongoX.Disconnect(context.Background()); err != nil {
-		return err
+
+	if u.Redis != nil {
+		if err := u.Redis.Close(); err != nil {
+			return err
+		}
 	}
-	if err := u.MongoConn.Disconnect(context.Background()); err != nil {
-		return err
+
+	if u.MongoX != nil {
+		if err := u.MongoX.Disconnect(context.Background()); err != nil {
+			return err
+		}
 	}
-	u.Nats.Close()
+
+	if u.MongoConn != nil {
+		if err := u.MongoConn.Disconnect(context.Background()); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
